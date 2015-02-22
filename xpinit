@@ -1,0 +1,371 @@
+#!/bin/bash
+
+#-#
+#-# Configuration
+#-#
+
+company='XWiki'
+artifactIdPrefix='xwiki'
+groupIdPrefix='org.xwiki.projects'
+mavenServer='maven.domain.com'
+svnServer='svn.domain.com'
+
+
+#-#
+#-# Gather project info
+#-#
+
+if [[ $# -eq 3 ]]
+then
+  projectName=$1
+  projectPrettyName=$2
+  xwikiVersion=$3
+elif [[ $# -eq 0 ]]
+then
+  echo 'Project (repo) name:'
+  read projectName
+
+  echo 'Project pretty name:'
+  read projectPrettyName
+
+  echo 'XWiki version:'
+  read xwikiVersion
+else
+  echo 'usage: xpinit [project_name] [pretty_name] [xwiki_version]'
+  exit
+fi
+
+
+#-#
+#-# Validation of project name
+#-#
+
+svn info ${svnServer}/${projectName} &>/dev/null
+error=$?
+
+while [[ -d $projectName || $error -ne 1 ]]
+do  
+  if [[ -d $projectName ]]
+  then
+    echo 'A local project with that name already exists!'
+  fi
+
+  if [[ $error -ne 1 ]]
+  then
+    echo 'There already exists a project on SVN with that name!'
+  fi
+
+  echo 'Please select a different name:'
+  read projectName
+
+  svn info ${svnServer}/${projectName} &>/dev/null
+  error=$?
+done
+
+
+#-#
+#-# POMs
+#-#
+
+pom_trunk="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+
+<!--
+ *
+ * See the NOTICE file distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *
+-->
+
+<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd\">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.xwiki.commons</groupId>
+    <artifactId>xwiki-commons-pom</artifactId>
+    <version>${xwikiVersion}</version>
+  </parent>  
+  <groupId>${groupIdPrefix}.${projectName}</groupId>
+  <artifactId>${artifactIdPrefix}-${projectName}-parent</artifactId>
+  <packaging>pom</packaging>
+  <name>${company} Projects - ${projectPrettyName} - Parent POM</name>
+  <version>1.0-SNAPSHOT</version>
+  <properties>
+    <xwiki.version>${xwikiVersion}</xwiki.version>
+    <!-- skip clirr, we don't need to check for api breakage (inherited from parent) -->
+    <xwiki.clirr.skip>true</xwiki.clirr.skip>
+  </properties>
+  <modules>
+    <module>wikis</module>
+  </modules>
+  <scm>
+    <connection>scm:svn:http://${svnServer}/${projectName}/trunk</connection>
+    <developerConnection>scm:svn:https://${svnServer}/${projectName}/trunk</developerConnection>
+    <url>http://${svnServer}/${projectName}/trunk</url>
+  </scm>
+  <distributionManagement>
+    <site>
+      <id>${mavenServer}</id>
+      <url>scp://${mavenServer}/home/maven/public_html/site</url>
+    </site>
+    <repository>
+      <id>${mavenServer}</id>
+      <name>${company} Maven2 Remote Repository for Releases</name>
+      <url>scp://${mavenServer}/home/maven/public_html/releases</url>
+    </repository>
+    <snapshotRepository>
+      <id>${mavenServer}</id>
+      <name>${company} Maven2 Development Repository for Snapshots</name>
+      <url>scp://${mavenServer}/home/maven/public_html/snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-site-plugin</artifactId>
+          <!-- Deactivate site plugin, we don't need it and apparently it has created issues to other people so 
+              I'll just try to avoid that -->
+          <configuration>
+            <skip>true</skip>
+            <skipDeploy>true</skipDeploy>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-deploy-plugin</artifactId>
+          <!-- We're deploying using the SCP protocol so we need the SSH Wagon for Maven 3 to work -->
+          <dependencies>
+            <dependency>
+              <groupId>org.apache.maven.wagon</groupId>
+              <artifactId>wagon-ssh</artifactId>
+              <version>2.2</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>"
+
+pom_wikis="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+
+<!--
+ *
+ * See the NOTICE file distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *
+-->
+
+<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>${artifactIdPrefix}-${projectName}-parent</artifactId>
+    <groupId>${groupIdPrefix}.${projectName}</groupId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>${artifactIdPrefix}-${projectName}-wikis</artifactId>
+  <name>${company} Projects - ${projectPrettyName} - Wikis</name>
+  <packaging>pom</packaging>
+  <modules>
+    <module>${projectName}</module>
+    <module>${projectName}-upgrade</module>
+  </modules> 
+  <build>
+    <extensions>
+      <extension>
+        <groupId>org.xwiki.commons</groupId>
+        <artifactId>xwiki-commons-tool-xar-handlers</artifactId>
+        <version>\${xwiki.version}</version>
+      </extension>
+    </extensions>
+    <plugins>
+      <plugin>
+        <groupId>org.xwiki.commons</groupId>
+        <artifactId>xwiki-commons-tool-xar-plugin</artifactId>
+        <version>\${xwiki.version}</version>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build> 
+</project>"
+
+pom_wiki="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+
+<!--
+ *
+ * See the NOTICE file distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *
+-->
+
+<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>${artifactIdPrefix}-${projectName}-wikis</artifactId>
+    <groupId>${groupIdPrefix}.${projectName}</groupId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>${artifactIdPrefix}-${projectName}-wikis-${projectName}</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>${company} Projects - ${projectPrettyName} - ${projectPrettyName} Wiki</name>
+  <packaging>xar</packaging>  
+</project>"
+
+pom_wiki_upgrade="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+
+<!--
+ *
+ * See the NOTICE file distributed with this work for additional
+ * information regarding copyright ownership.
+ *
+ * This is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation; either version 2.1 of
+ * the License, or (at your option) any later version.
+ *
+ * This software is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this software; if not, write to the Free
+ * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
+ * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
+ *
+-->
+
+<project xmlns=\"http://maven.apache.org/POM/4.0.0\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd\">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <artifactId>${artifactIdPrefix}-${projectName}-wikis</artifactId>
+    <groupId>${groupIdPrefix}.${projectName}</groupId>
+    <version>1.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>${artifactIdPrefix}-${projectName}-wikis-${projectName}-upgrade</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <name>${company} Projects - ${projectPrettyName} - ${projectPrettyName} Wiki Upgrade Package</name>
+  <packaging>xar</packaging>
+  <!-- Will depend on the ${projectPrettyName} main wiki xar and will exclude non upgradable pages -->
+  <dependencies>
+    <dependency>
+      <groupId>${groupIdPrefix}.${projectName}</groupId>
+      <artifactId>${artifactIdPrefix}-${projectName}-wikis-${projectName}</artifactId>
+      <version>\${project.version}</version>
+      <type>xar</type>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.xwiki.commons</groupId>
+        <artifactId>xwiki-commons-tool-xar-plugin</artifactId>
+        <version>\${xwiki.version}</version>
+        <configuration>
+          <includeDependencies>true</includeDependencies>
+          <excludes>
+            <!-- We need this since we're overwriting default excludes -->
+            <exclude>**/META-INF/**</exclude>
+            <!-- Reference preferences should not be in the upgrade package -->
+            <exclude>**/XWiki/XWikiPreferences.xml</exclude>
+            <exclude>**/WebPreferences.xml</exclude>
+          </excludes>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>"
+
+
+#-#
+#-# Make directory structure
+#-#
+
+mkdir -p ${projectName}/{trunk/wikis/{${projectName}/src/main/resources,${projectName}-upgrade},branches,tags}
+
+
+#-#
+#-# Create the pom files
+#-#
+
+echo "$pom_trunk"        > ${projectName}/trunk/pom.xml
+echo "$pom_wikis"        > ${projectName}/trunk/wikis/pom.xml
+echo "$pom_wiki"         > ${projectName}/trunk/wikis/${projectName}/pom.xml
+echo "$pom_wiki_upgrade" > ${projectName}/trunk/wikis/${projectName}-upgrade/pom.xml
+
+
+#-#
+#-# Display project tree 
+#-#
+
+find $projectName -print | sed -e 's;[^/]*/;|____;g;s;____|; |;g'
+
+
+#-#
+#-# Commit to SVN
+#-#
+
+echo -e "\nDo you want to commit the new project? (yes/no):"  
+read reply
+
+if [[ $reply =~ ^([yY][eE][sS]|[yY])$ ]]
+then
+  echo -e "\n[Commiting project files]\n"
+  svn import -m "Initializing ${projectPrettyName} project" $projectName http://${svnServer}/${projectName}
+
+  echo -e "\n-------------"
+  echo -e "\n[Removing non-working copy]"
+  echo -e "\n-------------"
+  rm -rf $projectName
+
+  echo -e "\n[Checking out project]\n"
+  svn co http://${svnServer}/${projectName}
+fi
